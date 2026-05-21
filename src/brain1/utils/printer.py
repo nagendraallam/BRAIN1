@@ -1,2 +1,2 @@
 def print_hello():
-    print("Hello, World!")
+    print("BRAIN1 v0.1.0")
