@@ -11,5 +11,8 @@ dependencies = [
     "zstandard>=0.25.0",
 ]
 
+[project.scripts]
+brain1 = "brain1:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
