@@ -1,16 +1,39 @@
-from ripgrep_rs import search_structured
-import zstandard as zstd
-import os
 import subprocess
+import sys
 
 
-# seek in compressed file
-def search_compressed_file(compressed_file_path: str, query: str) -> list[dict]:
+def search_in_compressed_files(files: list[str], query: str) -> dict[str, list[str]]:
     """
-    Search a compressed file for a query using ripgrep
+    Use ripgrep (-z) to search *query* across a list of .zst files.
+
+    Returns a dict mapping filename → list of matching lines.
+    Exits with an error message on rg failure (returncode 2).
     """
-    result = subprocess.run(["rg", "-z", query, compressed_file_path], capture_output=True, text=True)
-    if result.returncode == 0:
-        print("Found in file " + compressed_file_path + ": " + result.stdout)
+    if not files:
+        return {}
 
+    rg_cmd = [
+        "rg", "-z",
+        "--color=never",
+        "--with-filename",
+        "--no-line-number",
+        "-i",
+        query,
+    ] + files
 
+    result = subprocess.run(rg_cmd, capture_output=True, text=True)
+
+    if result.returncode == 2:
+        print(f"Error: ripgrep failed.\n{result.stderr.strip()}", file=sys.stderr)
+        sys.exit(1)
+
+    matches: dict[str, list[str]] = {}
+    for line in result.stdout.splitlines():
+        parts = line.split(":", 1)
+        if len(parts) == 2:
+            filepath, matched_text = parts
+            import os
+            filename = os.path.basename(filepath)
+            matches.setdefault(filename, []).append(matched_text.strip())
+
+    return matches

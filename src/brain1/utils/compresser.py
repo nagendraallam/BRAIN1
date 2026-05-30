@@ -1,25 +1,31 @@
-import zstandard as zstd
 import os
+import zstandard as zstd
 
-def compress_file(file_path: str, force: bool = False) -> str:
-    """
-    Compress a file using zstandard
-    Pr stats of compression
-    """
-    output_file_path = file_path + ".zstd"
-    # TODO: Make level and threads configurable
-    compressor = zstd.ZstdCompressor(level=9, threads=os.cpu_count())
 
-    if os.path.exists(output_file_path) and not force:
-        print(f"File {output_file_path} already exists, skipping compression")
-        print(f"If this is an ERROR, run with force=True")
-        return output_file_path
-   
-    with open(file_path, "rb") as f:
-        data = f.read()
-    compressed_data = compressor.compress(data)
-    with open(output_file_path, "wb") as f:
-        f.write(compressed_data)
-    print(f"Compressed {file_path} to {output_file_path}")
-    print(f"Compression ratio: {len(compressed_data) / len(data)}")
-    return output_file_path
+def compress_file(source_path: str, force: bool = False) -> str:
+    """Compress *source_path* with zstandard and return the output path (.zst)."""
+    output_path = source_path + ".zst"
+
+    if os.path.exists(output_path) and not force:
+        raise FileExistsError(
+            f"Compressed file already exists: {output_path}. "
+            "Pass force=True to overwrite."
+        )
+
+    compressor = zstd.ZstdCompressor(level=9, threads=os.cpu_count() or 1)
+    with open(source_path, "rb") as fh:
+        data = fh.read()
+
+    compressed = compressor.compress(data)
+
+    with open(output_path, "wb") as fh:
+        fh.write(compressed)
+
+    return output_path
+
+
+def decompress_file(source_path: str) -> bytes:
+    """Return the raw decompressed bytes of a .zst file."""
+    decompressor = zstd.ZstdDecompressor()
+    with open(source_path, "rb") as fh:
+        return decompressor.decompress(fh.read())
