@@ -1,8 +1,6 @@
 <div align="center">
-  <img src="assets/brain1.png" alt="brain1 logo" width="160" />
-  <br /><br />
-  <img src="assets/banner.png" alt="brain1 banner" width="720" />
-  <br /><br />
+  <img src="assets/brain1.png" alt="brain1 logo" width="240" />
+  <br /><br /> 
   <p>
     <b>A persistent memory layer for AI agents and developers.</b><br />
     Store thoughts, notes, and task history — compressed, searchable, instant.
@@ -13,6 +11,7 @@
     <img src="https://img.shields.io/badge/search-ripgrep-orange?style=flat-square" />
     <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" />
   </p>
+    <img src="assets/banner.png" alt="brain1 banner" width="720" />
 </div>
 
 ---
@@ -53,7 +52,7 @@ pip install ripgrep-rs
 
 ```bash
 # Clone the repo
-git clone https://github.com/your-username/brain1.git
+git clone https://github.com/nagendraallam/brain1.git
 cd brain1
 
 # Install (editable mode recommended for development)
