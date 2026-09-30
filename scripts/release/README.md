@@ -27,7 +27,9 @@ the licenses directory before publishing binaries from custom locations.
 The archive is for the build host's OS/architecture. Cross-compiling only the
 Go executable is insufficient because native tools must match. The workflow
 builds on separate macOS, Linux and Windows hosts and uploads artifacts. A tag
-run also creates a **draft** GitHub release for review; it does not publish it.
+run publishes a GitHub release after every build and smoke test succeeds.
+Tags containing a hyphen (for example v0.2.0-rc3) are marked as prereleases.
+Rerunning the workflow updates the release assets without creating a duplicate.
 
 ## Verify a bundle
 
