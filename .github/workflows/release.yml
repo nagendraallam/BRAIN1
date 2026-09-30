@@ -1,0 +1,76 @@
+name: Build native bundles
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('ci-{0}', github.run_number) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: false
+      - name: Install Linux engines
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ripgrep zstd
+      - name: Install macOS engines
+        if: runner.os == 'macOS'
+        run: brew install ripgrep zstd
+      - name: Install pinned Windows engines
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $rgZip = "$env:RUNNER_TEMP/rg.zip"
+          $zstdZip = "$env:RUNNER_TEMP/zstd.zip"
+          Invoke-WebRequest https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip -OutFile $rgZip
+          if ((Get-FileHash $rgZip -Algorithm SHA256).Hash.ToLower() -ne '71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5') { throw 'ripgrep checksum mismatch' }
+          Invoke-WebRequest https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-v1.5.7-win64.zip -OutFile $zstdZip
+          Expand-Archive $rgZip "$env:RUNNER_TEMP/rg"
+          Expand-Archive $zstdZip "$env:RUNNER_TEMP/zstd"
+          (Get-ChildItem "$env:RUNNER_TEMP/rg" -Recurse -Filter rg.exe | Select-Object -First 1).DirectoryName >> $env:GITHUB_PATH
+          (Get-ChildItem "$env:RUNNER_TEMP/zstd" -Recurse -Filter zstd.exe | Select-Object -First 1).DirectoryName >> $env:GITHUB_PATH
+      - name: Test
+        run: go test -race ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Build bundle
+        shell: bash
+        run: go run ./scripts/release -version "$VERSION"
+      - name: Verify bundled tools
+        shell: bash
+        run: go run ./scripts/smoke -bundle "dist/brain1-$VERSION-$(go env GOOS)-$(go env GOARCH)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: brain1-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error
+  draft-release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create draft release for review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" artifacts/* --verify-tag --draft --title "BRAIN1 $TAG" --notes 'Bundled ripgrep and Zstandard. See README and release instructions for setup and platform requirements.'

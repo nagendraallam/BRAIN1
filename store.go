@@ -1,14 +1,12 @@
-// Package brain1 provides an offline, compressed memory store without subprocesses.
+// Package brain1 provides streaming memory storage with Zstandard and ripgrep.
 package brain1
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -18,10 +16,12 @@ import (
 )
 
 const Extension = ".md.zst"
-const maxLineSize = 64 << 20
 
 // Store can be shared by goroutines. Each operation owns its codec resources.
-type Store struct{ dir string }
+type Store struct {
+	dir     string
+	options Options
+}
 type Entry struct {
 	Name string `json:"name"`
 	Size int64  `json:"size"`
@@ -33,7 +33,13 @@ type Match struct {
 
 // Open uses BRAIN1_DIR, then the original Python location ~/.config/brain1,
 // when dir is empty. Existing Python .md.zst entries need no migration.
-func Open(dir string) (*Store, error) {
+func Open(dir string) (*Store, error) { return OpenWithOptions(dir, Options{}) }
+
+// OpenWithOptions selects compression and optional explicit native tool paths.
+func OpenWithOptions(dir string, options Options) (*Store, error) {
+	if err := options.normalize(); err != nil {
+		return nil, err
+	}
 	if dir == "" {
 		dir = os.Getenv("BRAIN1_DIR")
 	}
@@ -51,7 +57,7 @@ func Open(dir string) (*Store, error) {
 	if err = os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
-	return &Store{dir: dir}, nil
+	return &Store{dir: dir, options: options}, nil
 }
 
 func sanitize(name string) string {
@@ -92,19 +98,7 @@ func (s *Store) AddReader(content io.Reader, name string) (entry Entry, err erro
 	}
 	defer os.Remove(f.Name())
 	defer f.Close()
-	enc, err := zstd.NewWriter(f, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(9)), zstd.WithEncoderConcurrency(1))
-	if err != nil {
-		return entry, err
-	}
-	defer enc.Close()
-	checked := &contentCheck{dst: enc}
-	if _, err = io.CopyBuffer(checked, content, make([]byte, 128<<10)); err != nil {
-		return entry, err
-	}
-	if !checked.nonBlank && len(checked.pending) == 0 {
-		return entry, errors.New("no content provided")
-	}
-	if err = enc.Close(); err != nil {
+	if err = s.compress(content, f); err != nil {
 		return entry, err
 	}
 	if err = f.Sync(); err != nil {
@@ -250,39 +244,4 @@ func (s *Store) withReader(name string, fn func(io.Reader) error) error {
 		return fmt.Errorf("read %s: %w", name, err)
 	}
 	return nil
-}
-
-// Find searches each line using a case-insensitive Go regular expression.
-// Input is streamed, but returned matching lines occupy memory. Individual
-// lines are limited to 64 MiB. Go's regex syntax differs slightly from ripgrep.
-func (s *Store) Find(query string) ([]Match, error) {
-	re, err := regexp.Compile("(?i)" + query)
-	if err != nil {
-		return nil, err
-	}
-	entries, err := s.List()
-	if err != nil {
-		return nil, err
-	}
-	matches := make([]Match, 0)
-	for _, e := range entries {
-		m := Match{Name: e.Name}
-		err = s.withReader(e.Name, func(r io.Reader) error {
-			scanner := bufio.NewScanner(r)
-			scanner.Buffer(make([]byte, 64<<10), maxLineSize+1)
-			for scanner.Scan() {
-				if re.Match(scanner.Bytes()) {
-					m.Lines = append(m.Lines, strings.TrimSpace(scanner.Text()))
-				}
-			}
-			return scanner.Err()
-		})
-		if err != nil {
-			return nil, err
-		}
-		if len(m.Lines) > 0 {
-			matches = append(matches, m)
-		}
-	}
-	return matches, nil
 }

@@ -1,6 +1,7 @@
 # Performance runner
 
-Run from the repository root with Go 1.25 or newer. Dependencies are vendored.
+Run from the repository root with Go 1.25 or newer and ripgrep/Zstandard
+installed or selected through BRAIN1_RG/BRAIN1_ZSTD. Go dependencies are vendored.
 
 ## Your own text file
 
@@ -60,7 +61,8 @@ Results use decimal MB and warm caches. Read excludes terminal rendering and
 hashing. There is no random seeking within a large compressed entry. The
 program retains matching search lines; broad queries can use more memory.
 Real-input queries may have zero matches depending on the supplied corpus.
-Input lines longer than 64 MiB are outside the search API's supported limit.
+The benchmark's independent validation scanner limits each line to 64 MiB.
+Native ripgrep search has its own memory behavior for extremely long lines.
 The historical results in the main README are measurements, not guarantees.
 
 Small allocation/throughput benchmarks are also available:

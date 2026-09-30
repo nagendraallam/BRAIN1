@@ -9,6 +9,8 @@ import (
 	brain1 "github.com/nagendraallam/BRAIN1"
 )
 
+var version = "dev"
+
 const help = `BRAIN1 — local compressed memory
 
 Usage:
@@ -18,9 +20,14 @@ Usage:
   brain1 list                     List memories
 
 Set BRAIN1_DIR to override ~/.config/brain1.
-No Python, ripgrep, zstd executable, or server required.`
+Uses bundled or installed ripgrep and Zstandard; no Python or server.
+BRAIN1_COMPRESSION=fast|balanced|dense (default: balanced).`
 
 func run(args []string, in io.Reader, out io.Writer) error {
+	if len(args) == 1 && args[0] == "--version" {
+		fmt.Fprintln(out, "brain1", version)
+		return nil
+	}
 	if len(args) == 0 {
 		fmt.Fprintln(out, help)
 		return nil
